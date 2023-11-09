@@ -330,7 +330,7 @@ def main(*argv):
             test_entropy1, test_entropy2))
 
         if args.lr_scheduler:
-            scheduler.step()
+            scheduler.step(test_loss)
 
         # save checkpoint
         if args.checkpoint:
