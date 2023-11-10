@@ -239,7 +239,7 @@ def main(*argv):
     eval_interval = args.eval_interval
     for e in range(args.epoch):
         if args.lr_scheduler:
-            logging.info('lr_scheduler lr={}'.format(scheduler.get_last_lr()[0]))
+            logging.info('lr_scheduler lr={}'.format(optimizer.param_groups[0]['lr']))
         epoch += 1
         steps_epoch = 0
         sum_loss1_epoch = 0
