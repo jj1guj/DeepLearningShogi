@@ -24,10 +24,21 @@ RUN apt-get update && apt-get install -y \
     emacs \
     software-properties-common \
     build-essential libopenblas-dev \
-    tmux &&\
+    tmux fish &&\
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+RUN ln -s -f pip /usr/bin/pip3.8
+
 RUN pip3 install torch==1.12.1+cu113 torchvision==0.13.1+cu113 timm -f https://download.pytorch.org/whl/torch_stable.html
-RUN pip3 install cython scipy && \
-    rm -r ~/.cache/pip
+RUN pip3 install cython scipy
+
+WORKDIR /tmp
+RUN git clone https://github.com/jj1guj/DeepLearningShogi && \
+    cd DeepLearningShogi && \
+    git checkout use_-ReduceLROnPlateau && \
+    pip install -v . && \
+    rm -r ~/.cache/pip && \
+    rm -rf /tmp/DeepLearningShogi
+
+WORKDIR /root
