@@ -24,7 +24,8 @@ RUN apt-get update && apt-get install -y \
     emacs \
     software-properties-common \
     build-essential libopenblas-dev \
-    tmux fish &&\
+    tmux fish libjemalloc-dev libjemalloc2  && \
+    ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
@@ -42,3 +43,4 @@ RUN git clone https://github.com/jj1guj/DeepLearningShogi && \
     rm -rf /tmp/DeepLearningShogi
 
 WORKDIR /root
+ENV LD_PRELOAD=/usr/local/lib/libjemalloc.so
