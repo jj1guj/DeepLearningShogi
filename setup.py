@@ -32,7 +32,7 @@ setup(
     version = '0.1.1',
     author = 'Tadao Yamaoka',
     url='https://github.com/TadaoYamaoka/DeepLearningShogi',
-    packages = ['dlshogi', 'dlshogi.network', 'dlshogi.utils', 'dlshogi.sam'],
+    packages = ['dlshogi', 'dlshogi.network', 'dlshogi.utils', 'dlshogi.sam', 'dlshogi.sam.example', 'dlshogi.sam.example.utility'],
     ext_modules=ext_modules,
     cmdclass={'build_ext': my_build_ext},
     description = 'DeepLearningShogi(dlshogi)',
