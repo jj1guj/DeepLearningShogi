@@ -86,7 +86,7 @@ def main(*argv):
         args.optimizer += '()'
     # optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
     base_optimizer = torch.optim.SGD
-    optimizer = SAM(model.parameters(), base_optimizer, lr=0.1, momentum=0.9, adaptive=True, rho=2.0)
+    optimizer = SAM(model.parameters(), base_optimizer, lr=0.1, momentum=0.9, weight_decay=0.0005, adaptive=True, rho=2.0)
     if args.lr_scheduler:
         if args.lr_scheduler[-1] != ')':
             args.lr_scheduler += '()'
