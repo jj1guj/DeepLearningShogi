@@ -90,7 +90,7 @@ def main(*argv):
     if args.lr_scheduler:
         if args.lr_scheduler[-1] != ')':
             args.lr_scheduler += '()'
-        scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(base_optimizer,'))
+        scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(optimizer.base_optimizer,'))
     if args.use_swa:
         logging.info(f'use swa(swa_start_epoch={args.swa_start_epoch}, swa_freq={args.swa_freq}, swa_n_avr={args.swa_n_avr})')
         ema_a = args.swa_n_avr / (args.swa_n_avr + 1)
