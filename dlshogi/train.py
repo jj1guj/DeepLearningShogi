@@ -1,4 +1,4 @@
-﻿import numpy as np
+import numpy as np
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
@@ -239,7 +239,7 @@ def main(*argv):
     eval_interval = args.eval_interval
     for e in range(args.epoch):
         if args.lr_scheduler:
-            logging.info('lr_scheduler lr={}'.format(scheduler.get_last_lr()[0]))
+            logging.info('lr_scheduler lr={}'.format(optimizer.param_groups[0]['lr']))
         epoch += 1
         steps_epoch = 0
         sum_loss1_epoch = 0
@@ -330,7 +330,7 @@ def main(*argv):
             test_entropy1, test_entropy2))
 
         if args.lr_scheduler:
-            scheduler.step()
+            scheduler.step(test_loss)
 
         # save checkpoint
         if args.checkpoint:
