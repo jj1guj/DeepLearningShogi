@@ -56,6 +56,7 @@ def main(*argv):
     parser.add_argument('--temperature', type=float, default=1.0)
     parser.add_argument('--patch', type=str, help='Overwrite with the hcpe')
     parser.add_argument('--cache', type=str, help='training data cache file')
+    parser.add_argument('--use_sam', default=False)
     args = parser.parse_args(argv)
 
     if args.log:
@@ -85,12 +86,19 @@ def main(*argv):
     if args.optimizer[-1] != ')':
         args.optimizer += '()'
     # optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
-    base_optimizer = torch.optim.SGD
-    optimizer = SAM(model.parameters(), base_optimizer, lr=0.1, momentum=0.9, weight_decay=0.0005, adaptive=True, rho=2.0)
+    if args.use_sam:
+        base_optimizer = torch.optim.SGD
+        optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, momentum=0.9, adaptive=True, rho=2.0)
+    else:
+        optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
+
     if args.lr_scheduler:
         if args.lr_scheduler[-1] != ')':
             args.lr_scheduler += '()'
-        scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(optimizer.base_optimizer,'))
+        if args.use_sam:
+            scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(base_optimizer,'))
+        else:
+            scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(optimizer,'))
     if args.use_swa:
         logging.info(f'use swa(swa_start_epoch={args.swa_start_epoch}, swa_freq={args.swa_freq}, swa_n_avr={args.swa_n_avr})')
         ema_a = args.swa_n_avr / (args.swa_n_avr + 1)
@@ -255,7 +263,8 @@ def main(*argv):
             steps += 1
 
             #SAM 1st Path
-            optimizer.step = optimizer.first_step
+            if args.use_sam:
+                optimizer.step = optimizer.first_step
             with torch.cuda.amp.autocast(enabled=args.use_amp):
                 model.train()
 
@@ -282,34 +291,35 @@ def main(*argv):
             scaler.step(optimizer)
             scaler.update()
 
-            # SAM 2nd Path
-            optimizer.zero_grad()
-            optimizer.step = optimizer.second_step
-            with torch.cuda.amp.autocast(enabled=args.use_amp):
-                model.train()
+            if args.use_sam:
+                # SAM 2nd Path
+                optimizer.zero_grad()
+                optimizer.step = optimizer.second_step
+                with torch.cuda.amp.autocast(enabled=args.use_amp):
+                    model.train()
 
-                disable_running_stats(model)
-                y1, y2 = model(x1, x2)
+                    disable_running_stats(model)
+                    y1, y2 = model(x1, x2)
 
-                model.zero_grad()
-                loss1 = cross_entropy_loss_with_soft_target(y1, t1)
-                if args.use_critic:
-                    z = t2.view(-1) - value.view(-1) + 0.5
-                    loss1 = (loss1 * z).mean()
-                else:
-                    loss1 = loss1.mean()
-                if args.beta:
-                    loss1 += args.beta * (F.softmax(y1, dim=1) * F.log_softmax(y1, dim=1)).sum(dim=1).mean()
-                loss2 = bce_with_logits_loss(y2, t2)
-                loss3 = bce_with_logits_loss(y2, value)
-                loss = loss1 + (1 - args.val_lambda) * loss2 + args.val_lambda * loss3
+                    model.zero_grad()
+                    loss1 = cross_entropy_loss_with_soft_target(y1, t1)
+                    if args.use_critic:
+                        z = t2.view(-1) - value.view(-1) + 0.5
+                        loss1 = (loss1 * z).mean()
+                    else:
+                        loss1 = loss1.mean()
+                    if args.beta:
+                        loss1 += args.beta * (F.softmax(y1, dim=1) * F.log_softmax(y1, dim=1)).sum(dim=1).mean()
+                    loss2 = bce_with_logits_loss(y2, t2)
+                    loss3 = bce_with_logits_loss(y2, value)
+                    loss = loss1 + (1 - args.val_lambda) * loss2 + args.val_lambda * loss3
 
-            scaler.scale(loss).backward()
-            if args.clip_grad_max_norm:
-                scaler.unscale_(optimizer)
-                torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad_max_norm)
-            scaler.step(optimizer)
-            scaler.update()
+                scaler.scale(loss).backward()
+                if args.clip_grad_max_norm:
+                    scaler.unscale_(optimizer)
+                    torch.nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad_max_norm)
+                scaler.step(optimizer)
+                scaler.update()
 
             if args.use_swa and epoch >= args.swa_start_epoch and t % args.swa_freq == 0:
                 swa_model.update_parameters(model)
