@@ -56,7 +56,7 @@ def main(*argv):
     parser.add_argument('--temperature', type=float, default=1.0)
     parser.add_argument('--patch', type=str, help='Overwrite with the hcpe')
     parser.add_argument('--cache', type=str, help='training data cache file')
-    parser.add_argument('--use_sam', default=False)
+    parser.add_argument('--use_sam', action='store_true')
     args = parser.parse_args(argv)
 
     if args.log:
@@ -87,7 +87,7 @@ def main(*argv):
         args.optimizer += '()'
     # optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
     if args.use_sam:
-        base_optimizer = torch.optim.SGD
+        base_optimizer = optim.SGD
         optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, momentum=0.9, adaptive=True, rho=2.0)
     else:
         optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
@@ -96,7 +96,7 @@ def main(*argv):
         if args.lr_scheduler[-1] != ')':
             args.lr_scheduler += '()'
         if args.use_sam:
-            scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(base_optimizer,'))
+            scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(optimizer.base_optimizer,'))
         else:
             scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(optimizer,'))
     if args.use_swa:
