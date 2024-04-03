@@ -85,7 +85,6 @@ def main(*argv):
 
     if args.optimizer[-1] != ')':
         args.optimizer += '()'
-    # optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
     if args.use_sam:
         base_optimizer = optim.SGD
         optimizer = SAM(model.parameters(), base_optimizer, lr=args.lr, momentum=0.9, adaptive=True, rho=2.0)
