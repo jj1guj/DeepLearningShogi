@@ -73,7 +73,7 @@ namespace {
 }
 
 void OptionsMap::init(Searcher* s) {
-    (*this)["Book_File"]                   = USIOption("book.bin");
+    (*this)["Book_File"]                   = USIOption("ponkotsu_densenet10_kernel3.bin");
     (*this)["Best_Book_Move"]              = USIOption(true);
     (*this)["Book_Consider_Draw"]          = USIOption(false);
     (*this)["OwnBook"]                     = USIOption(false);
@@ -85,45 +85,45 @@ void OptionsMap::init(Searcher* s) {
     (*this)["MultiPV"]                     = USIOption(1, 1, MaxLegalMoves - 1);
     (*this)["Draw_Ply"]                    = USIOption(0, 0, INT_MAX);
     (*this)["Const_Playout"]               = USIOption(0, 0, INT_MAX);
-    (*this)["UCT_Threads"]                 = USIOption(2, 0, 256);
-    (*this)["UCT_Threads2"]                = USIOption(0, 0, 256);
-    (*this)["UCT_Threads3"]                = USIOption(0, 0, 256);
-    (*this)["UCT_Threads4"]                = USIOption(0, 0, 256);
+    (*this)["UCT_Threads"]                 = USIOption(6, 0, 256);
+    (*this)["UCT_Threads2"]                = USIOption(6, 0, 256);
+    (*this)["UCT_Threads3"]                = USIOption(6, 0, 256);
+    (*this)["UCT_Threads4"]                = USIOption(6, 0, 256);
     (*this)["UCT_Threads5"]                = USIOption(0, 0, 256);
     (*this)["UCT_Threads6"]                = USIOption(0, 0, 256);
     (*this)["UCT_Threads7"]                = USIOption(0, 0, 256);
     (*this)["UCT_Threads8"]                = USIOption(0, 0, 256);
-    (*this)["DNN_Model"]                   = USIOption(R"(model.onnx)");
-    (*this)["DNN_Model2"]                  = USIOption("");
-    (*this)["DNN_Model3"]                  = USIOption("");
-    (*this)["DNN_Model4"]                  = USIOption("");
+    (*this)["DNN_Model"]                   = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
+    (*this)["DNN_Model2"]                  = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
+    (*this)["DNN_Model3"]                  = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
+    (*this)["DNN_Model4"]                  = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
     (*this)["DNN_Model5"]                  = USIOption("");
     (*this)["DNN_Model6"]                  = USIOption("");
     (*this)["DNN_Model7"]                  = USIOption("");
     (*this)["DNN_Model8"]                  = USIOption("");
     (*this)["DNN_Batch_Size"]              = USIOption(128, 1, 256);
-    (*this)["DNN_Batch_Size2"]             = USIOption(0, 0, 256);
-    (*this)["DNN_Batch_Size3"]             = USIOption(0, 0, 256);
-    (*this)["DNN_Batch_Size4"]             = USIOption(0, 0, 256);
+    (*this)["DNN_Batch_Size2"]             = USIOption(128, 0, 256);
+    (*this)["DNN_Batch_Size3"]             = USIOption(128, 0, 256);
+    (*this)["DNN_Batch_Size4"]             = USIOption(128, 0, 256);
     (*this)["DNN_Batch_Size5"]             = USIOption(0, 0, 256);
     (*this)["DNN_Batch_Size6"]             = USIOption(0, 0, 256);
     (*this)["DNN_Batch_Size7"]             = USIOption(0, 0, 256);
     (*this)["DNN_Batch_Size8"]             = USIOption(0, 0, 256);
-    (*this)["Softmax_Temperature"]         = USIOption(174, 1, 500);
+    (*this)["Softmax_Temperature"]         = USIOption(193, 1, 500);
     (*this)["Mate_Root_Search"]            = USIOption(33, 0, 37);
 #ifdef PV_MATE_SEARCH
     (*this)["PV_Mate_Search_Threads"]      = USIOption(0, 0, 256);
     (*this)["PV_Mate_Search_Depth"]        = USIOption(33, 0, 37);
     (*this)["PV_Mate_Search_Nodes"]        = USIOption(500000, 0, 10000000);
 #endif
-    (*this)["Resign_Threshold"]            = USIOption(10, 0, 1000);
+    (*this)["Resign_Threshold"]            = USIOption(0, 0, 1000);
     (*this)["Draw_Value_Black"]            = USIOption(500, 0, 1000);
     (*this)["Draw_Value_White"]            = USIOption(500, 0, 1000);
-    (*this)["C_init"]                      = USIOption(144, 0, 500);
-    (*this)["C_base"]                      = USIOption(28288, 10000, 100000);
-    (*this)["C_fpu_reduction"]             = USIOption(27, 0, 100);
-    (*this)["C_init_root"]                 = USIOption(116, 0, 500);
-    (*this)["C_base_root"]                 = USIOption(25617, 10000, 100000);
+    (*this)["C_init"]                      = USIOption(140, 0, 500);
+    (*this)["C_base"]                      = USIOption(20004, 10000, 100000);
+    (*this)["C_fpu_reduction"]             = USIOption(35, 0, 100);
+    (*this)["C_init_root"]                 = USIOption(146, 0, 500);
+    (*this)["C_base_root"]                 = USIOption(30893, 10000, 100000);
     (*this)["C_fpu_reduction_root"]        = USIOption(0, 0, 100);
     (*this)["UCT_NodeLimit"]               = USIOption(10000000, 100000, 1000000000); // UCTノードの上限
     (*this)["DfPn_Hash"]                   = USIOption(2048, 64, 4096); // DfPnハッシュサイズ
