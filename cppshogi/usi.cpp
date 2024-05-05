@@ -93,10 +93,10 @@ void OptionsMap::init(Searcher* s) {
     (*this)["UCT_Threads6"]                = USIOption(0, 0, 256);
     (*this)["UCT_Threads7"]                = USIOption(0, 0, 256);
     (*this)["UCT_Threads8"]                = USIOption(0, 0, 256);
-    (*this)["DNN_Model"]                   = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
-    (*this)["DNN_Model2"]                  = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
-    (*this)["DNN_Model3"]                  = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
-    (*this)["DNN_Model4"]                  = USIOption(R"(model_densenet10_add_all_c256-250.onnx)");
+    (*this)["DNN_Model"]                   = USIOption(R"(/root/DeepLearningShogi/usi/bin/model_densenet10_add_all_c256-250.onnx)");
+    (*this)["DNN_Model2"]                  = USIOption(R"(/root/DeepLearningShogi/usi/bin/model_densenet10_add_all_c256-250.onnx)");
+    (*this)["DNN_Model3"]                  = USIOption(R"(/root/DeepLearningShogi/usi/bin/model_densenet10_add_all_c256-250.onnx)");
+    (*this)["DNN_Model4"]                  = USIOption(R"(/root/DeepLearningShogi/usi/bin/model_densenet10_add_all_c256-250.onnx)");
     (*this)["DNN_Model5"]                  = USIOption("");
     (*this)["DNN_Model6"]                  = USIOption("");
     (*this)["DNN_Model7"]                  = USIOption("");
@@ -125,7 +125,7 @@ void OptionsMap::init(Searcher* s) {
     (*this)["C_init_root"]                 = USIOption(146, 0, 500);
     (*this)["C_base_root"]                 = USIOption(30893, 10000, 100000);
     (*this)["C_fpu_reduction_root"]        = USIOption(0, 0, 100);
-    (*this)["UCT_NodeLimit"]               = USIOption(10000000, 100000, 1000000000); // UCTノードの上限
+    (*this)["UCT_NodeLimit"]               = USIOption(85000000, 100000, 1000000000); // UCTノードの上限
     (*this)["DfPn_Hash"]                   = USIOption(2048, 64, 4096); // DfPnハッシュサイズ
     (*this)["DfPn_Min_Search_Millisecs"]   = USIOption(300, 0, INT_MAX);
     (*this)["ReuseSubtree"]                = USIOption(true);
@@ -176,7 +176,7 @@ void OptionsMap::init(Searcher* s) {
 #endif
     (*this)["DebugMessage"]                = USIOption(false);
 #ifdef NDEBUG
-    (*this)["Engine_Name"]                 = USIOption("dlshogi");
+    (*this)["Engine_Name"]                 = USIOption("ponkotsu");
 #else
     (*this)["Engine_Name"]                 = USIOption("dlshogi Debug Build");
 #endif
