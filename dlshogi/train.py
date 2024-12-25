@@ -344,7 +344,7 @@ def main(*argv):
             logging.info('Updating batch normalization')
             forward_ = swa_model.forward
             swa_model.forward = lambda x : forward_(**x)
-            with torch.cuda.amp.autocast(enabled=args.use_amp):
+            with torch.autocast(device_type_str, enabled=args.use_amp):
                 update_bn(hcpe_loader(train_data, args.batchsize), swa_model)
             del swa_model.forward
 
