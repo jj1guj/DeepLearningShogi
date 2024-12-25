@@ -1,10 +1,10 @@
-FROM nvcr.io/nvidia/tensorrt:22.08-py3
+FROM nvcr.io/nvidia/tensorrt:24.04-py3
 
-ENV DEBIAN_FRONTEND noninteractive
+ENV DEBIAN_FRONTEND=noninteractive
 RUN ln -s -f /bin/true /usr/bin/chfn
 RUN echo "resolvconf resolvconf/linkify-resolvconf boolean false" | debconf-set-selections
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     libcurl4-openssl-dev \
     wget \
     zlib1g-dev \
@@ -21,17 +21,15 @@ RUN apt-get update && apt-get install -y \
     pv \
     bzip2 \
     unzip \
-    emacs \
     software-properties-common \
     build-essential libopenblas-dev \
+    clang lld \
     tmux fish libjemalloc-dev libjemalloc2  && \
     ln -s /usr/lib/$(uname -m)-linux-gnu/libjemalloc.so.2 /usr/local/lib/libjemalloc.so && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN ln -s -f pip /usr/bin/pip3.8
-
-RUN pip3 install torch==1.12.1+cu113 torchvision==0.13.1+cu113 timm -f https://download.pytorch.org/whl/torch_stable.html
+RUN pip3 install torch torchvision
 RUN pip3 install cython scipy
 
 WORKDIR /tmp
