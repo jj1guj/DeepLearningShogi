@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/tensorrt:24.04-py3
+FROM nvcr.io/nvidia/tensorrt:24.10-py3
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN ln -s -f /bin/true /usr/bin/chfn
@@ -30,7 +30,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     rm -rf /var/lib/apt/lists/*
 
 RUN pip3 install --upgrade pip
-RUN pip3 install torch torchvision
+RUN pip3 install --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu126
 RUN pip3 install cython scipy
 
 WORKDIR /tmp
