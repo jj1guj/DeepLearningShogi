@@ -29,6 +29,7 @@ RUN apt-get update && apt-get upgrade -y && apt-get install -y \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
+RUN pip3 install --upgrade pip
 RUN pip3 install torch torchvision
 RUN pip3 install cython scipy
 
