@@ -74,8 +74,10 @@ def main(*argv):
 
     if args.gpu >= 0:
         device = torch.device(f"cuda:{args.gpu}")
+        device_type_str = "cuda"
     else:
         device = torch.device("cpu")
+        device_type_str = "cpu"
 
     model = policy_value_network(args.network)
     model.to(device)
@@ -99,7 +101,7 @@ def main(*argv):
     bce_with_logits_loss = torch.nn.BCEWithLogitsLoss()
     if args.use_amp:
         logging.info('use amp')
-    scaler = torch.cuda.amp.GradScaler(enabled=args.use_amp)
+    scaler = torch.amp.GradScaler(device_type_str, enabled=args.use_amp)
 
     if args.use_evalfix:
         logging.info('use evalfix')
@@ -111,7 +113,7 @@ def main(*argv):
         logging.info('Loading the model from {}'.format(args.initmodel))
         serializers.load_npz(args.initmodel, model)
     if args.resume:
-        checkpoint = torch.load(args.resume, map_location=device)
+        checkpoint = torch.load(args.resume, map_location=device, weights_only=True)
         epoch = checkpoint['epoch']
         t = checkpoint['t']
         if 'model' in checkpoint:
@@ -249,7 +251,7 @@ def main(*argv):
         for x1, x2, t1, t2, value in train_dataloader:
             t += 1
             steps += 1
-            with torch.cuda.amp.autocast(enabled=args.use_amp):
+            with torch.autocast(device_type_str, enabled=args.use_amp):
                 model.train()
 
                 y1, y2 = model(x1, x2)
