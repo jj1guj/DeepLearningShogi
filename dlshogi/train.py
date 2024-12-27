@@ -10,6 +10,8 @@ from dlshogi import serializers
 from dlshogi.data_loader import Hcpe3DataLoader
 from dlshogi.data_loader import DataLoader
 
+import schedulefree
+
 
 import argparse
 import random
@@ -33,11 +35,12 @@ def main(*argv):
     parser.add_argument('--model', type=str, help='model file name')
     parser.add_argument('--initmodel', '-m', default='', help='Initialize the model from given file (for compatibility)')
     parser.add_argument('--log', help='log file path')
-    parser.add_argument('--optimizer', default='SGD(momentum=0.9,nesterov=True)', help='optimizer')
+    # parser.add_argument('--optimizer', default='SGD(momentum=0.9,nesterov=True)', help='optimizer')
+    parser.add_argument('--optimizer', default='SGDScheduleFree(momentum=0.9)', help='optimizer')
     parser.add_argument('--lr', type=float, default=0.01, help='learning rate')
     parser.add_argument('--weight_decay', type=float, default=0.0001, help='weight decay rate')
-    parser.add_argument('--lr_scheduler', help='learning rate scheduler')
-    parser.add_argument('--reset_scheduler', action='store_true')
+    # parser.add_argument('--lr_scheduler', help='learning rate scheduler')
+    # parser.add_argument('--reset_scheduler', action='store_true')
     parser.add_argument('--clip_grad_max_norm', type=float, default=10.0, help='max norm of the gradients')
     parser.add_argument('--use_critic', action='store_true')
     parser.add_argument('--beta', type=float, help='entropy regularization coeff')
@@ -64,8 +67,8 @@ def main(*argv):
     logging.info('batchsize={}'.format(args.batchsize))
     logging.info('lr={}'.format(args.lr))
     logging.info('weight_decay={}'.format(args.weight_decay))
-    if args.lr_scheduler:
-        logging.info('lr_scheduler {}'.format(args.lr_scheduler))
+    # if args.lr_scheduler:
+    #     logging.info('lr_scheduler {}'.format(args.lr_scheduler))
     if args.use_critic:
         logging.info('use critic')
     if args.beta:
@@ -84,11 +87,13 @@ def main(*argv):
 
     if args.optimizer[-1] != ')':
         args.optimizer += '()'
-    optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
-    if args.lr_scheduler:
-        if args.lr_scheduler[-1] != ')':
-            args.lr_scheduler += '()'
-        scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(optimizer,'))
+    # optimizer = eval('optim.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
+    optimizer = eval('schedulefree.' + args.optimizer.replace('(', '(model.parameters(),lr=args.lr,' + 'weight_decay=args.weight_decay,' if args.weight_decay >= 0 else ''))
+    # optimizer = schedulefree.SGDScheduleFree(model.parameters(), lr=args.lr, weight_decay=args.weight_decay, momentum=0.9)
+    # if args.lr_scheduler:
+    #     if args.lr_scheduler[-1] != ')':
+    #         args.lr_scheduler += '()'
+    #     scheduler = eval('optim.lr_scheduler.' + args.lr_scheduler.replace('(', '(optimizer,'))
     if args.use_swa:
         logging.info(f'use swa(swa_start_epoch={args.swa_start_epoch}, swa_freq={args.swa_freq}, swa_n_avr={args.swa_n_avr})')
         ema_a = args.swa_n_avr / (args.swa_n_avr + 1)
@@ -123,19 +128,19 @@ def main(*argv):
                 swa_model.load_state_dict(checkpoint['swa_model'])
             if not args.reset_optimizer:
                 optimizer.load_state_dict(checkpoint['optimizer'])
-                if not args.lr_scheduler:
-                    for param_group in optimizer.param_groups:
-                        param_group['lr'] = args.lr
-                        if args.weight_decay >= 0:
-                            param_group['weight_decay'] = args.weight_decay
+                # if not args.lr_scheduler:
+                for param_group in optimizer.param_groups:
+                    # param_group['lr'] = args.lr
+                    if args.weight_decay >= 0:
+                        param_group['weight_decay'] = args.weight_decay
             if args.use_amp and 'scaler' in checkpoint:
                 scaler.load_state_dict(checkpoint['scaler'])
-            if args.lr_scheduler and not args.reset_scheduler and 'scheduler' in checkpoint:
-                scheduler.load_state_dict(checkpoint['scheduler'])
+            # if args.lr_scheduler and not args.reset_scheduler and 'scheduler' in checkpoint:
+            #     scheduler.load_state_dict(checkpoint['scheduler'])
         else:
             # for compatibility
             logging.info('Loading the optimizer state from {}'.format(args.resume))
-            base_optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             if args.use_amp and 'scaler_state_dict' in checkpoint:
                 scaler.load_state_dict(checkpoint['scaler_state_dict'])
     else:
@@ -171,7 +176,7 @@ def main(*argv):
         truth = t >= 0.5
         return pred.eq(truth).sum().item() / len(t)
 
-    def test(model):
+    def test(model, optimizer=None):
         steps = 0
         sum_test_loss1 = 0
         sum_test_loss2 = 0
@@ -182,6 +187,8 @@ def main(*argv):
         sum_test_entropy1 = 0
         sum_test_entropy2 = 0
         model.eval()
+        if optimizer is not None:
+            optimizer.eval()
         with torch.no_grad():
             for x1, x2, t1, t2, value in test_dataloader:
                 y1, y2 = model(x1, x2)
@@ -227,8 +234,8 @@ def main(*argv):
             'scaler': scaler.state_dict()}
         if args.use_swa and epoch >= args.swa_start_epoch:
             checkpoint['swa_model'] = swa_model.state_dict()
-        if args.lr_scheduler:
-            checkpoint['scheduler'] = scheduler.state_dict()
+        # if args.lr_scheduler:
+        #     checkpoint['scheduler'] = scheduler.state_dict()
 
         torch.save(checkpoint, path)
 
@@ -240,8 +247,8 @@ def main(*argv):
     sum_loss = 0
     eval_interval = args.eval_interval
     for e in range(args.epoch):
-        if args.lr_scheduler:
-            logging.info('lr_scheduler lr={}'.format(optimizer.param_groups[0]['lr']))
+        # if args.lr_scheduler:
+        logging.info('lr_scheduler lr={}'.format(optimizer.param_groups[0]['lr']))
         epoch += 1
         steps_epoch = 0
         sum_loss1_epoch = 0
@@ -253,6 +260,7 @@ def main(*argv):
             steps += 1
             with torch.autocast(device_type_str, enabled=args.use_amp):
                 model.train()
+                optimizer.train()
 
                 y1, y2 = model(x1, x2)
 
@@ -287,6 +295,7 @@ def main(*argv):
             # print train loss
             if t % eval_interval == 0:
                 model.eval()
+                optimizer.eval()
 
                 x1, x2, t1, t2, value = test_dataloader.sample()
                 with torch.no_grad():
@@ -322,7 +331,7 @@ def main(*argv):
         sum_loss_epoch += sum_loss
 
         # print train loss and test loss for each epoch
-        test_loss1, test_loss2, test_loss3, test_loss, test_accuracy1, test_accuracy2, test_entropy1, test_entropy2 = test(model)
+        test_loss1, test_loss2, test_loss3, test_loss, test_accuracy1, test_accuracy2, test_entropy1, test_entropy2 = test(model, optimizer)
 
         logging.info('epoch = {}, steps = {}, train loss avr = {:.07f}, {:.07f}, {:.07f}, {:.07f}, test loss = {:.07f}, {:.07f}, {:.07f}, {:.07f}, test accuracy = {:.07f}, {:.07f}, test entropy = {:.07f}, {:.07f}'.format(
             epoch, t,
@@ -331,8 +340,8 @@ def main(*argv):
             test_accuracy1, test_accuracy2,
             test_entropy1, test_entropy2))
 
-        if args.lr_scheduler:
-            scheduler.step(test_loss)
+        # if args.lr_scheduler:
+        #     scheduler.step(test_loss)
 
         # save checkpoint
         if args.checkpoint:
