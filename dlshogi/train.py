@@ -10,6 +10,8 @@ from dlshogi import serializers
 from dlshogi.data_loader import Hcpe3DataLoader
 from dlshogi.data_loader import DataLoader
 
+from mup import set_base_shapes
+
 
 import argparse
 import random
@@ -86,6 +88,7 @@ def main(*argv):
 
     model = policy_value_network(args.network)
     model.to(device)
+    set_base_shapes(model, None)
 
     def create_optimizer(optimizer_str, model_params, lr, weight_decay):
         optimizer_name, optimizer_args = optimizer_str.split('(', 1)
