@@ -361,7 +361,7 @@ def main(*argv):
                 sum_loss = 0
 
             if args.lr_scheduler and args.scheduler_step_mode == 'step':
-                scheduler.step()
+                scheduler.step(loss)
 
         steps_epoch += steps
         sum_loss1_epoch += sum_loss1
@@ -380,7 +380,7 @@ def main(*argv):
             test_entropy1, test_entropy2))
 
         if args.lr_scheduler and args.scheduler_step_mode == 'epoch':
-            scheduler.step()
+            scheduler.step(test_loss)
 
         # save checkpoint
         if args.checkpoint:
