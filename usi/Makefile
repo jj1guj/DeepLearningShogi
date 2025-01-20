@@ -7,8 +7,8 @@ CFLAGS += -DNYUGYOKU_FEATURES
 NVCC_CFLAGS += -DNYUGYOKU_FEATURES
 endif
 LDFLAGS = -lpthread -lnvinfer -lnvparsers -lnvonnxparser -lcudart -flto
-INCLUDE = -I../usi -I../cppshogi -I/usr/local/cuda/include -I/root/TensorRT-8.6.1.6/include
-LIB = -L/usr/local/cuda/lib64 -L/root/TensorRT-8.6.1.6/lib
+INCLUDE = -I../usi -I../cppshogi -I/usr/local/cuda/include
+LIB = -L/usr/local/cuda/lib64
 
 target = bin/usi
 target_make_book = bin/make_book

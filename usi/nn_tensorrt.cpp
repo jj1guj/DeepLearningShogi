@@ -40,8 +40,6 @@ NNTensorRT::NNTensorRT(const char* filename, const int gpu_id, const int max_bat
 	checkCudaErrors(cudaMalloc((void**)&y1_dev, MAX_MOVE_LABEL_NUM * (size_t)SquareNum * max_batch_size * sizeof(DType)));
 	checkCudaErrors(cudaMalloc((void**)&y2_dev, max_batch_size * sizeof(DType)));
 
-	inputBindings = { x1_dev, x2_dev, y1_dev, y2_dev };
-
 	load_model(filename);
 }
 
@@ -87,9 +85,6 @@ void NNTensorRT::build(const std::string& onnx_filename)
 	{
 		throw std::runtime_error("parseFromFile");
 	}
-
-	builder->setMaxBatchSize(max_batch_size);
-	config->setMaxWorkspaceSize(64_MiB);
 
 	std::unique_ptr<nvinfer1::IInt8Calibrator> calibrator;
 	if (builder->platformHasFastInt8())
@@ -140,6 +135,7 @@ void NNTensorRT::build(const std::string& onnx_filename)
 	profile->setDimensions("input2", nvinfer1::OptProfileSelector::kOPT, nvinfer1::Dims4(max_batch_size, dims2[1], dims2[2], dims2[3]));
 	profile->setDimensions("input2", nvinfer1::OptProfileSelector::kMAX, nvinfer1::Dims4(max_batch_size, dims2[1], dims2[2], dims2[3]));
 	config->addOptimizationProfile(profile);
+	config->setMemoryPoolLimit(nvinfer1::MemoryPoolType::kWORKSPACE, 64_MiB);
 
 	// TensorRT 8 より nvinfer1::IBuilder::buildSerializedNetwork() が追加され、 nvinfer1::IBuilder::buildEngineWithConfig() は非推奨となった。
 	// nvinfer1::IBuilder::buildEngineWithConfig() は TensorRT 10.0 にて削除される見込み。
@@ -218,22 +214,26 @@ void NNTensorRT::load_model(const char* filename)
 		throw std::runtime_error("createExecutionContext");
 	}
 
-	inputDims1 = engine->getBindingDimensions(0);
-	inputDims2 = engine->getBindingDimensions(1);
+	inputDims1 = engine->getTensorShape("input1");
+	inputDims2 = engine->getTensorShape("input2");
 }
 
 void NNTensorRT::forward(const int batch_size, packed_features1_t* p1, packed_features2_t* p2, DType* y1, DType* y2)
 {
 	inputDims1.d[0] = batch_size;
 	inputDims2.d[0] = batch_size;
-	context->setBindingDimensions(0, inputDims1);
-	context->setBindingDimensions(1, inputDims2);
+	context->setInputShape("input1", inputDims1);
+	context->setInputShape("input2", inputDims2);
 
 	checkCudaErrors(cudaMemcpyAsync(p1_dev, p1, sizeof(packed_features1_t) * batch_size, cudaMemcpyHostToDevice, cudaStreamPerThread));
 	checkCudaErrors(cudaMemcpyAsync(p2_dev, p2, sizeof(packed_features2_t) * batch_size, cudaMemcpyHostToDevice, cudaStreamPerThread));
 	unpack_features1(batch_size, p1_dev, x1_dev, cudaStreamPerThread);
 	unpack_features2(batch_size, p2_dev, x2_dev, cudaStreamPerThread);
-	const bool status = context->enqueue(batch_size, inputBindings.data(), cudaStreamPerThread, nullptr);
+	context->setTensorAddress("input1", x1_dev);
+	context->setTensorAddress("input2", x2_dev);
+	context->setTensorAddress("output_policy", y1_dev);
+	context->setTensorAddress("output_value", y2_dev);
+	const bool status = context->enqueueV3(cudaStreamPerThread);
 	assert(status);
 	checkCudaErrors(cudaMemcpyAsync(y1, y1_dev, sizeof(DType) * MAX_MOVE_LABEL_NUM * (size_t)SquareNum * batch_size , cudaMemcpyDeviceToHost, cudaStreamPerThread));
 	checkCudaErrors(cudaMemcpyAsync(y2, y2_dev, sizeof(DType) * batch_size, cudaMemcpyDeviceToHost, cudaStreamPerThread));
