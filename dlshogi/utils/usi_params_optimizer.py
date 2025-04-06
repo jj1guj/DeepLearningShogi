@@ -23,6 +23,7 @@ parser.add_argument('--opening_moves', type=int, default=24)
 parser.add_argument('--name')
 parser.add_argument('--init_params', default='C_init:144,C_base:28288,C_fpu_reduction:27,C_init_root:116,C_base_root:25617,Softmax_Temperature:174')
 parser.add_argument('--suggest_params', default='C_init:100~200,C_base:20000~50000,C_fpu_reduction:0~40,C_init_root:100~200,C_base_root:20000~50000,Softmax_Temperature:100~200')
+parser.add_argument('--csa', type=str)
 parser.add_argument('--debug', action='store_true')
 args = parser.parse_args()
 
@@ -83,7 +84,13 @@ def objective(trial):
 
     # 先後入れ替えて対局
     callback = Callback()
-    cshogi.cli.main(args.command1, args.command2, options1, options2, names=[args.name, None], games=args.games,
+    if args.csa is not None:
+        cshogi.cli.main(args.command1, args.command2, options1, options2, names=[args.name, None], games=args.games,
+            mate_win=True, byoyomi=args.byoyomi, draw=args.max_turn,
+            opening=args.opening, opening_moves=args.opening_moves, keep_process=True, is_display=False, debug=args.debug,
+            callback=callback, csa=args.csa)
+    else:
+        cshogi.cli.main(args.command1, args.command2, options1, options2, names=[args.name, None], games=args.games,
         mate_win=True, byoyomi=args.byoyomi, draw=args.max_turn,
         opening=args.opening, opening_moves=args.opening_moves, keep_process=True, is_display=False, debug=args.debug,
         callback=callback)
