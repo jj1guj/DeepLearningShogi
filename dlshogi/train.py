@@ -22,6 +22,8 @@ import importlib
 
 import logging
 
+torch.cuda.empty_cache()
+
 def main(*argv):
     parser = argparse.ArgumentParser(description='Train policy value network')
     parser.add_argument('train_data', type=str, nargs='+', help='training data file')
@@ -87,7 +89,7 @@ def main(*argv):
         device_type_str = "cpu"
 
     model = policy_value_network(args.network)
-    model.to(device)
+    model.cpu()
     set_base_shapes(model, None)
 
     def create_optimizer(optimizer_str, model_params, lr, weight_decay):
@@ -155,12 +157,13 @@ def main(*argv):
         logging.info('Loading the model from {}'.format(args.initmodel))
         serializers.load_npz(args.initmodel, model)
     if args.resume:
-        checkpoint = torch.load(args.resume, map_location=device, weights_only=True)
+        checkpoint = torch.load(args.resume, map_location="cpu", weights_only=True)
         epoch = checkpoint['epoch']
         t = checkpoint['t']
         if 'model' in checkpoint:
             logging.info('Loading the checkpoint from {}'.format(args.resume))
             model.load_state_dict(checkpoint['model'])
+            model.to(device)
             if args.use_swa and 'swa_model' in checkpoint:
                 swa_model.load_state_dict(checkpoint['swa_model'])
             if not args.reset_optimizer:
