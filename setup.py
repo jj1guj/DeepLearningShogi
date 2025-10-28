@@ -6,6 +6,12 @@ NYUGYOKU_FEATURES = ('NYUGYOKU_FEATURES', None) if os.environ.get('NYUGYOKU_FEAT
 
 class my_build_ext(build_ext):
     def build_extensions(self):
+        import numpy
+        numpy_include = numpy.get_include()
+        for ext in self.extensions:
+            if numpy_include not in ext.include_dirs:
+                ext.include_dirs.append(numpy_include)
+
         if self.compiler.compiler_type == 'unix':
             for e in self.extensions:
                 e.extra_compile_args = ['-std=c++17', '-msse4.2', '-mavx2', '-fopenmp']
@@ -18,9 +24,9 @@ class my_build_ext(build_ext):
 
     def finalize_options(self):
         build_ext.finalize_options(self)
-        __builtins__.__NUMPY_SETUP__ = False
-        import numpy
-        self.include_dirs.append(numpy.get_include())
+        #__builtins__.__NUMPY_SETUP__ = False
+        #import numpy
+        #self.include_dirs.append(numpy.get_include())
 
 ext_macros = [('HAVE_SSE4', None), ('HAVE_SSE42', None), ('HAVE_AVX2', None)]
 if NYUGYOKU_FEATURES:
