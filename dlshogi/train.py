@@ -10,7 +10,7 @@ from dlshogi import serializers
 from dlshogi.data_loader import Hcpe3DataLoader
 from dlshogi.data_loader import DataLoader
 
-from mup import set_base_shapes
+# from mup import set_base_shapes
 
 
 import argparse
@@ -90,7 +90,7 @@ def main(*argv):
 
     model = policy_value_network(args.network)
     model.cpu()
-    set_base_shapes(model, None)
+    # set_base_shapes(model, None)
 
     def create_optimizer(optimizer_str, model_params, lr, weight_decay):
         optimizer_name, optimizer_args = optimizer_str.split('(', 1)
@@ -137,7 +137,7 @@ def main(*argv):
         ema_b = 1 / (args.swa_n_avr + 1)
         ema_avg = lambda averaged_model_parameter, model_parameter, num_averaged : ema_a * averaged_model_parameter + ema_b * model_parameter
         swa_model = AveragedModel(model, avg_fn=ema_avg)
-        set_base_shapes(swa_model, None, rescale_params=False)
+        # set_base_shapes(swa_model, None, rescale_params=False)
     def cross_entropy_loss_with_soft_target(pred, soft_targets):
         return torch.sum(-soft_targets * F.log_softmax(pred, dim=1), 1)
     cross_entropy_loss = torch.nn.CrossEntropyLoss(reduction='none')
