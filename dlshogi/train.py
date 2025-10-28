@@ -89,7 +89,10 @@ def main(*argv):
         device_type_str = "cpu"
 
     model = policy_value_network(args.network)
-    model.cpu()
+    if args.resume:
+        model.cpu()
+    else:
+        model.to(device)
     # set_base_shapes(model, None)
 
     def create_optimizer(optimizer_str, model_params, lr, weight_decay):
