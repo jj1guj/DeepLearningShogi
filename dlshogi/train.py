@@ -167,6 +167,8 @@ def main(*argv):
             logging.info('Loading the checkpoint from {}'.format(args.resume))
             model.load_state_dict(checkpoint['model'])
             model.to(device)
+            if args.use_swa:
+                swa_model.to(device)
             if args.use_swa and 'swa_model' in checkpoint:
                 swa_model.load_state_dict(checkpoint['swa_model'])
             if not args.reset_optimizer:
