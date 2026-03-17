@@ -62,6 +62,7 @@ def main(*argv):
     parser.add_argument('--temperature', type=float, default=1.0)
     parser.add_argument('--patch', type=str, help='Overwrite with the hcpe')
     parser.add_argument('--cache', type=str, help='training data cache file')
+    parser.add_argument('--skip_bn_reestimate', action='store_true', help='Skip batch normalization re-estimation')
     args = parser.parse_args(argv)
 
     if args.log:
@@ -400,7 +401,9 @@ def main(*argv):
 
     # save model
     if args.model:
-        if args.use_swa and epoch >= args.swa_start_epoch:
+        if args.skip_bn_reestimate:
+            logging.info('Skipping batch normalization re-estimation (--skip_bn_reestimate)')
+        elif args.use_swa and epoch >= args.swa_start_epoch:
             logging.info('Updating batch normalization')
             forward_ = swa_model.forward
             swa_model.forward = lambda x : forward_(**x)
