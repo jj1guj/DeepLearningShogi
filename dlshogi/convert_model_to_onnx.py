@@ -59,24 +59,35 @@ def main(*argv):
     hcpevec = np.array([([ 88, 164,  73,  33,  12, 215,  87,  33, 126, 142,  77,  33,  44, 175,  66, 120,  20, 194, 171,  16, 158,  77,  33,  44, 215,  95,  33,  62, 142,  73,  33,  12], 0, 7739, 1, 0)] * batchsize, HuffmanCodedPosAndEval)
     x1, x2, t1, t2, z, value = mini_batch(hcpevec)
 
+    export_kwargs = {
+        'verbose': True,
+        'do_constant_folding': True,
+        'input_names': ['input1', 'input2'],
+        'output_names': ['output_policy', 'output_value'],
+    }
+
     if args.fixed_batchsize is None:
-        torch.onnx.export(model, (x1, x2), args.onnx,
-            verbose = True,
-            do_constant_folding = True,
-            input_names = ['input1', 'input2'],
-            output_names = ['output_policy', 'output_value'],
-            dynamic_axes={
-                'input1' : {0 : 'batch_size'},
-                'input2' : {0 : 'batch_size'},
-                'output_policy' : {0 : 'batch_size'},
-                'output_value' : {0 : 'batch_size'},
-                })
-    else:
-        torch.onnx.export(model, (x1, x2), args.onnx,
-            verbose = True,
-            do_constant_folding = True,
-            input_names = ['input1', 'input2'],
-            output_names = ['output_policy', 'output_value'])
+        export_kwargs['dynamic_axes'] = {
+            'input1': {0: 'batch_size'},
+            'input2': {0: 'batch_size'},
+            'output_policy': {0: 'batch_size'},
+            'output_value': {0: 'batch_size'},
+        }
+
+    # 単一 .onnx に保存（external data を使わない）
+    try:
+        torch.onnx.export(
+            model, (x1, x2), args.onnx,
+            external_data=False,
+            **export_kwargs
+        )
+    except TypeError:
+        # 旧PyTorch向け
+        torch.onnx.export(
+            model, (x1, x2), args.onnx,
+            use_external_data_format=False,
+            **export_kwargs
+        )
 
 if __name__ == '__main__':
     main(*sys.argv[1:])
