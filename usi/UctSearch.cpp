@@ -270,14 +270,15 @@ public:
 	void Initialize(const int new_thread, const int gpu_id, const int policy_value_batch_maxsize);
 	void InitGPU() {
 		mutex_gpu.lock();
-		if (nn == nullptr) {
 #ifdef ONNXRUNTIME
+		if (nn == nullptr) {
 			nn = (NN*)new NNOnnxRuntime(model_path[gpu_id].c_str(), gpu_id, policy_value_batch_maxsize);
-#else
-			nn = (NN*)new NNTensorRT(model_path[gpu_id].c_str(), gpu_id, policy_value_batch_maxsize);
-#endif
 		}
-#ifndef ONNXRUNTIME
+#else
+		if (nn == nullptr || nn->slot_capacity() < threads) {
+			delete nn;
+			nn = (NN*)new NNTensorRT(model_path[gpu_id].c_str(), gpu_id, policy_value_batch_maxsize, threads);
+		}
 		nn->prepare_slots(threads);
 #endif
 		mutex_gpu.unlock();

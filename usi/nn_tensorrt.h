@@ -39,8 +39,9 @@ using InferUniquePtr = std::unique_ptr<T, InferDeleter>;
 
 class NNTensorRT {
 public:
-	NNTensorRT(const char* filename, const int gpu_id, const int max_batch_size);
+	NNTensorRT(const char* filename, const int gpu_id, const int max_batch_size, const int profile_count = 1);
 	~NNTensorRT();
+	int slot_capacity() const;
 	void prepare_slots(const int slot_count);
 	void forward(const int slot_id, const int batch_size, packed_features1_t* x1, packed_features2_t* x2, DType* y1, DType* y2);
 
@@ -49,19 +50,16 @@ private:
 
 	const int gpu_id;
 	const int max_batch_size;
+	const int profile_count;
 	InferUniquePtr<nvinfer1::ICudaEngine> engine;
-	InferUniquePtr<nvinfer1::IExecutionContext> context;
 	nvinfer1::Dims inputDims1;
 	nvinfer1::Dims inputDims2;
 	std::vector<std::unique_ptr<InferenceSlot>> slots;
 	std::mutex slots_mutex;
-	std::mutex inference_mutex;
-	cudaEvent_t last_infer_done;
-	bool has_last_infer_done;
 
 	void load_model(const char* filename);
 	void build(const std::string& onnx_filename);
-	std::unique_ptr<InferenceSlot> create_slot();
+	std::unique_ptr<InferenceSlot> create_slot(const int profile_index);
 	InferenceSlot* get_slot(const int slot_id);
 	void forward_impl(InferenceSlot* slot, const int batch_size, packed_features1_t* p1, packed_features2_t* p2, DType* y1, DType* y2);
 };

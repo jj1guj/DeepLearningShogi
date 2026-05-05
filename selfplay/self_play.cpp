@@ -509,8 +509,9 @@ public:
 	}
 	void InitGPU() {
 		mutex_all_gpu.lock();
-		if (nn == nullptr) {
-			nn = (NN*)new NNTensorRT(model_path.c_str(), gpu_id, policy_value_batch_maxsize);
+		if (nn == nullptr || nn->slot_capacity() < threads) {
+			delete nn;
+			nn = (NN*)new NNTensorRT(model_path.c_str(), gpu_id, policy_value_batch_maxsize, threads);
 		}
 		nn->prepare_slots(threads);
 		mutex_all_gpu.unlock();
