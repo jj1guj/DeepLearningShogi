@@ -30,29 +30,47 @@ constexpr long long int operator"" _MiB(long long unsigned int val)
 	return val * (1 << 20);
 }
 
-NNTensorRT::NNTensorRT(const char* filename, const int gpu_id, const int max_batch_size) : gpu_id(gpu_id), max_batch_size(max_batch_size)
+struct NNTensorRT::InferenceSlot {
+	packed_features1_t* p1_dev = nullptr;
+	packed_features2_t* p2_dev = nullptr;
+	features1_t* x1_dev = nullptr;
+	features2_t* x2_dev = nullptr;
+	DType* y1_dev = nullptr;
+	DType* y2_dev = nullptr;
+	cudaStream_t stream = nullptr;
+	std::vector<void*> bindings;
+};
+
+NNTensorRT::NNTensorRT(const char* filename, const int gpu_id, const int max_batch_size) :
+	gpu_id(gpu_id),
+	max_batch_size(max_batch_size),
+	last_infer_done(nullptr),
+	has_last_infer_done(false)
 {
-	// Create host and device buffers
-	checkCudaErrors(cudaMalloc((void**)&p1_dev, sizeof(packed_features1_t) * max_batch_size));
-	checkCudaErrors(cudaMalloc((void**)&p2_dev, sizeof(packed_features2_t) * max_batch_size));
-	checkCudaErrors(cudaMalloc((void**)&x1_dev, sizeof(features1_t) * max_batch_size));
-	checkCudaErrors(cudaMalloc((void**)&x2_dev, sizeof(features2_t) * max_batch_size));
-	checkCudaErrors(cudaMalloc((void**)&y1_dev, MAX_MOVE_LABEL_NUM * (size_t)SquareNum * max_batch_size * sizeof(DType)));
-	checkCudaErrors(cudaMalloc((void**)&y2_dev, max_batch_size * sizeof(DType)));
-
-	inputBindings = { x1_dev, x2_dev, y1_dev, y2_dev };
-
 	load_model(filename);
+	checkCudaErrors(cudaEventCreateWithFlags(&last_infer_done, cudaEventDisableTiming));
 }
 
 NNTensorRT::~NNTensorRT()
 {
-	checkCudaErrors(cudaFree(p1_dev));
-	checkCudaErrors(cudaFree(p2_dev));
-	checkCudaErrors(cudaFree(x1_dev));
-	checkCudaErrors(cudaFree(x2_dev));
-	checkCudaErrors(cudaFree(y1_dev));
-	checkCudaErrors(cudaFree(y2_dev));
+	for (auto& slot : slots)
+	{
+		if (slot->stream)
+		{
+			checkCudaErrors(cudaStreamSynchronize(slot->stream));
+			checkCudaErrors(cudaStreamDestroy(slot->stream));
+		}
+		checkCudaErrors(cudaFree(slot->p1_dev));
+		checkCudaErrors(cudaFree(slot->p2_dev));
+		checkCudaErrors(cudaFree(slot->x1_dev));
+		checkCudaErrors(cudaFree(slot->x2_dev));
+		checkCudaErrors(cudaFree(slot->y1_dev));
+		checkCudaErrors(cudaFree(slot->y2_dev));
+	}
+	if (last_infer_done)
+	{
+		checkCudaErrors(cudaEventDestroy(last_infer_done));
+	}
 }
 
 void NNTensorRT::build(const std::string& onnx_filename)
@@ -222,20 +240,72 @@ void NNTensorRT::load_model(const char* filename)
 	inputDims2 = engine->getBindingDimensions(1);
 }
 
-void NNTensorRT::forward(const int batch_size, packed_features1_t* p1, packed_features2_t* p2, DType* y1, DType* y2)
+std::unique_ptr<NNTensorRT::InferenceSlot> NNTensorRT::create_slot()
 {
-	inputDims1.d[0] = batch_size;
-	inputDims2.d[0] = batch_size;
-	context->setBindingDimensions(0, inputDims1);
-	context->setBindingDimensions(1, inputDims2);
+	auto slot = std::unique_ptr<InferenceSlot>(new InferenceSlot());
+	checkCudaErrors(cudaMalloc((void**)&slot->p1_dev, sizeof(packed_features1_t) * max_batch_size));
+	checkCudaErrors(cudaMalloc((void**)&slot->p2_dev, sizeof(packed_features2_t) * max_batch_size));
+	checkCudaErrors(cudaMalloc((void**)&slot->x1_dev, sizeof(features1_t) * max_batch_size));
+	checkCudaErrors(cudaMalloc((void**)&slot->x2_dev, sizeof(features2_t) * max_batch_size));
+	checkCudaErrors(cudaMalloc((void**)&slot->y1_dev, MAX_MOVE_LABEL_NUM * (size_t)SquareNum * max_batch_size * sizeof(DType)));
+	checkCudaErrors(cudaMalloc((void**)&slot->y2_dev, max_batch_size * sizeof(DType)));
+	checkCudaErrors(cudaStreamCreateWithFlags(&slot->stream, cudaStreamNonBlocking));
+	slot->bindings = { slot->x1_dev, slot->x2_dev, slot->y1_dev, slot->y2_dev };
+	return slot;
+}
 
-	checkCudaErrors(cudaMemcpyAsync(p1_dev, p1, sizeof(packed_features1_t) * batch_size, cudaMemcpyHostToDevice, cudaStreamPerThread));
-	checkCudaErrors(cudaMemcpyAsync(p2_dev, p2, sizeof(packed_features2_t) * batch_size, cudaMemcpyHostToDevice, cudaStreamPerThread));
-	unpack_features1(batch_size, p1_dev, x1_dev, cudaStreamPerThread);
-	unpack_features2(batch_size, p2_dev, x2_dev, cudaStreamPerThread);
-	const bool status = context->enqueue(batch_size, inputBindings.data(), cudaStreamPerThread, nullptr);
-	assert(status);
-	checkCudaErrors(cudaMemcpyAsync(y1, y1_dev, sizeof(DType) * MAX_MOVE_LABEL_NUM * (size_t)SquareNum * batch_size , cudaMemcpyDeviceToHost, cudaStreamPerThread));
-	checkCudaErrors(cudaMemcpyAsync(y2, y2_dev, sizeof(DType) * batch_size, cudaMemcpyDeviceToHost, cudaStreamPerThread));
-	checkCudaErrors(cudaStreamSynchronize(cudaStreamPerThread));
+void NNTensorRT::prepare_slots(const int slot_count)
+{
+	std::lock_guard<std::mutex> lock(slots_mutex);
+	while ((int)slots.size() < slot_count)
+	{
+		slots.emplace_back(create_slot());
+	}
+}
+
+NNTensorRT::InferenceSlot* NNTensorRT::get_slot(const int slot_id)
+{
+	if (slot_id < 0 || slot_id >= (int)slots.size())
+	{
+		throw std::out_of_range("NNTensorRT slot_id");
+	}
+	return slots[slot_id].get();
+}
+
+void NNTensorRT::forward(const int slot_id, const int batch_size, packed_features1_t* p1, packed_features2_t* p2, DType* y1, DType* y2)
+{
+	forward_impl(get_slot(slot_id), batch_size, p1, p2, y1, y2);
+}
+
+void NNTensorRT::forward_impl(InferenceSlot* slot, const int batch_size, packed_features1_t* p1, packed_features2_t* p2, DType* y1, DType* y2)
+{
+	checkCudaErrors(cudaMemcpyAsync(slot->p1_dev, p1, sizeof(packed_features1_t) * batch_size, cudaMemcpyHostToDevice, slot->stream));
+	checkCudaErrors(cudaMemcpyAsync(slot->p2_dev, p2, sizeof(packed_features2_t) * batch_size, cudaMemcpyHostToDevice, slot->stream));
+	unpack_features1(batch_size, slot->p1_dev, slot->x1_dev, slot->stream);
+	unpack_features2(batch_size, slot->p2_dev, slot->x2_dev, slot->stream);
+	checkCudaErrors(cudaGetLastError());
+
+	{
+		std::lock_guard<std::mutex> lock(inference_mutex);
+		if (has_last_infer_done)
+		{
+			checkCudaErrors(cudaEventSynchronize(last_infer_done));
+		}
+
+		auto dims1 = inputDims1;
+		auto dims2 = inputDims2;
+		dims1.d[0] = batch_size;
+		dims2.d[0] = batch_size;
+		context->setBindingDimensions(0, dims1);
+		context->setBindingDimensions(1, dims2);
+
+		const bool status = context->enqueue(batch_size, slot->bindings.data(), slot->stream, nullptr);
+		assert(status);
+		checkCudaErrors(cudaEventRecord(last_infer_done, slot->stream));
+		has_last_infer_done = true;
+	}
+
+	checkCudaErrors(cudaMemcpyAsync(y1, slot->y1_dev, sizeof(DType) * MAX_MOVE_LABEL_NUM * (size_t)SquareNum * batch_size, cudaMemcpyDeviceToHost, slot->stream));
+	checkCudaErrors(cudaMemcpyAsync(y2, slot->y2_dev, sizeof(DType) * batch_size, cudaMemcpyDeviceToHost, slot->stream));
+	checkCudaErrors(cudaStreamSynchronize(slot->stream));
 }
