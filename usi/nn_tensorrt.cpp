@@ -39,7 +39,6 @@ struct NNTensorRT::InferenceSlot {
 	DType* y2_dev = nullptr;
 	cudaStream_t stream = nullptr;
 	InferUniquePtr<nvinfer1::IExecutionContext> context;
-	int profile_index = 0;
 	int binding_offset = 0;
 	std::vector<void*> bindings;
 };
@@ -248,7 +247,6 @@ std::unique_ptr<NNTensorRT::InferenceSlot> NNTensorRT::create_slot(const int pro
 	}
 
 	auto slot = std::unique_ptr<InferenceSlot>(new InferenceSlot());
-	slot->profile_index = profile_index;
 	const int bindings_per_profile = engine->getNbBindings() / engine->getNbOptimizationProfiles();
 	slot->binding_offset = bindings_per_profile * profile_index;
 	slot->bindings.resize(engine->getNbBindings(), nullptr);
