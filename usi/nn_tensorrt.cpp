@@ -262,9 +262,9 @@ std::unique_ptr<NNTensorRT::InferenceSlot> NNTensorRT::create_slot(const int pro
 	{
 		throw std::runtime_error("createExecutionContext");
 	}
-	if (!slot->context->setOptimizationProfile(profile_index))
+	if (!slot->context->setOptimizationProfileAsync(profile_index, slot->stream))
 	{
-		throw std::runtime_error("setOptimizationProfile");
+		throw std::runtime_error("setOptimizationProfileAsync");
 	}
 	slot->bindings[slot->binding_offset + 0] = slot->x1_dev;
 	slot->bindings[slot->binding_offset + 1] = slot->x2_dev;
