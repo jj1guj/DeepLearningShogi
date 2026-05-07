@@ -588,6 +588,7 @@ UCTSearcherGroup::Initialize()
 		dfpn.init();
 		dfpn.set_max_search_node(MATE_SEARCH_MAX_NODE);
 		dfpn.set_maxdepth(ROOT_MATE_SEARCH_DEPTH);
+		DfPn::set_draw_ply(MAX_MOVE);
 		mate_search_slot = new MateSearchEntry[policy_value_batch_maxsize];
 	}
 }
@@ -735,16 +736,22 @@ UCTSearcher::UctSearch(Position* pos, child_node_t* parent, uct_node_t* current,
 		// 経路を記録
 		trajectories.emplace_back(current, next_index);
 
-		// 千日手チェック
 		int isDraw = 0;
-		switch (pos->isDraw(16)) {
-		case NotRepetition: break;
-		case RepetitionDraw: isDraw = 2; break; // Draw
-		case RepetitionWin: isDraw = 1; break;
-		case RepetitionLose: isDraw = -1; break;
-		case RepetitionSuperior: isDraw = 1; break;
-		case RepetitionInferior: isDraw = -1; break;
-		default: UNREACHABLE;
+		// 最大手数を超えていたら千日手扱いとする
+		if (pos->gamePly() > MAX_MOVE) {
+			isDraw = 2; // Draw
+		}
+		else {
+			// 千日手チェック
+			switch (pos->isDraw(16)) {
+			case NotRepetition: break;
+			case RepetitionDraw: isDraw = 2; break; // Draw
+			case RepetitionWin: isDraw = 1; break;
+			case RepetitionLose: isDraw = -1; break;
+			case RepetitionSuperior: isDraw = 1; break;
+			case RepetitionInferior: isDraw = -1; break;
+			default: UNREACHABLE;
+			}
 		}
 
 		// 千日手の場合、ValueNetの値を使用しない
