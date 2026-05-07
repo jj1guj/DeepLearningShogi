@@ -270,19 +270,27 @@ public:
 	void Initialize(const int new_thread, const int gpu_id, const int policy_value_batch_maxsize);
 	void InitGPU() {
 		mutex_gpu.lock();
-		if (nn == nullptr) {
 #ifdef ONNXRUNTIME
+		if (nn == nullptr) {
 			nn = (NN*)new NNOnnxRuntime(model_path[gpu_id].c_str(), gpu_id, policy_value_batch_maxsize);
-#else
-			nn = (NN*)new NNTensorRT(model_path[gpu_id].c_str(), gpu_id, policy_value_batch_maxsize);
-#endif
 		}
+#else
+		if (nn == nullptr || nn->slot_capacity() < threads) {
+			delete nn;
+			nn = (NN*)new NNTensorRT(model_path[gpu_id].c_str(), gpu_id, policy_value_batch_maxsize, threads);
+		}
+		nn->prepare_slots(threads);
+#endif
 		mutex_gpu.unlock();
 	}
-	void nn_forward(const int batch_size, Features1* x1, Features2* x2, DType* y1, DType* y2) {
+	void nn_forward(const int slot_id, const int batch_size, Features1* x1, Features2* x2, DType* y1, DType* y2) {
+#ifdef ONNXRUNTIME
 		mutex_gpu.lock();
 		nn->forward(batch_size, x1, x2, y1, y2);
 		mutex_gpu.unlock();
+#else
+		nn->forward(slot_id, batch_size, x1, x2, y1, y2);
+#endif
 	}
 	void Run();
 	void Join();
@@ -1031,7 +1039,7 @@ UctSearchGenmove(Position* pos, const Key starting_pos_key, const std::vector<Mo
 
 	// ルート局面をグローバル変数に保存
 	pos_root = pos;
-	
+
 	const uct_node_t* current_root = tree->GetCurrentHead();
 
 	// 探索情報をクリア
@@ -1274,7 +1282,7 @@ UCTSearcher::ParallelUctSearch()
 		for (int i = 0; i < policy_value_batch_maxsize; i++) {
 			// 盤面のコピー
 			Position pos(*pos_root);
-			
+
 			// 1回プレイアウトする
 			visitor_pool[i].trajectories.clear();
 			const float result = UctSearch(&pos, nullptr, current_root, visitor_pool[i]);
@@ -1664,7 +1672,7 @@ void UCTSearcher::EvalNode() {
 	const int policy_value_batch_size = current_policy_value_batch_index;
 
 	// predict
-	grp->nn_forward(policy_value_batch_size, features1, features2, y1, y2);
+	grp->nn_forward(thread_id, policy_value_batch_size, features1, features2, y1, y2);
 
 	const DType(*logits)[MAX_MOVE_LABEL_NUM * SquareNum] = reinterpret_cast<DType(*)[MAX_MOVE_LABEL_NUM * SquareNum]>(y1);
 	const DType *value = y2;
