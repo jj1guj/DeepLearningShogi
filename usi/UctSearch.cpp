@@ -294,9 +294,7 @@ public:
 	}
 	void Run();
 	void Join();
-#ifdef THREAD_POOL
 	void Term();
-#endif
 
 	// GPUID
 	int gpu_id;
@@ -323,10 +321,8 @@ public:
 		thread_id(thread_id),
 		mt(new std::mt19937_64(std::chrono::system_clock::now().time_since_epoch().count() + thread_id)),
 		handle(nullptr),
-#ifdef THREAD_POOL
 		ready_th(true),
 		term_th(false),
-#endif
 		policy_value_batch_maxsize(policy_value_batch_maxsize) {
 		// キューを動的に確保する
 #ifdef ONNXRUNTIME
@@ -367,7 +363,6 @@ public:
 	}
 
 	void Run() {
-#ifdef THREAD_POOL
 		if (handle == nullptr) {
 			handle = new thread([this]() {
 #ifndef ONNXRUNTIME
@@ -394,32 +389,17 @@ public:
 			ready_th = true;
 			cond_th.notify_all();
 		}
-#else
-		handle = new thread([this]() {
-#ifndef ONNXRUNTIME
-			// スレッドにGPUIDを関連付けてから初期化する
-			cudaSetDevice(grp->gpu_id);
-#endif
-			grp->InitGPU();
-
-			this->ParallelUctSearch();
-		});
-#endif
 	}
 	// スレッド終了待機
 	void Join() {
-#ifdef THREAD_POOL
 		std::unique_lock<std::mutex> lk(mtx_th);
 		if (ready_th && !term_th)
 			cond_th.wait(lk, [this] { return !ready_th || term_th; });
-#else
-		handle->join();
-		delete handle;
-#endif
 	}
-#ifdef THREAD_POOL
 	// スレッドを終了
 	void Term() {
+		if (handle == nullptr)
+			return;
 		{
 			std::unique_lock<std::mutex> lk(mtx_th);
 			term_th = true;
@@ -428,8 +408,8 @@ public:
 		}
 		handle->join();
 		delete handle;
+		handle = nullptr;
 	}
-#endif
 
 private:
 	// UCT探索
@@ -450,13 +430,11 @@ private:
 	unique_ptr<std::mt19937_64> mt;
 	// スレッドのハンドル
 	thread *handle;
-#ifdef THREAD_POOL
 	// スレッドプール用
 	std::mutex mtx_th;
 	std::condition_variable cond_th;
 	bool ready_th;
 	bool term_th;
-#endif
 
 	int policy_value_batch_maxsize;
 	Features1* features1;
@@ -581,7 +559,6 @@ UCTSearcherGroup::Join()
 	}
 }
 
-#ifdef THREAD_POOL
 // スレッド終了
 void
 UCTSearcherGroup::Term()
@@ -593,7 +570,6 @@ UCTSearcherGroup::Term()
 		}
 	}
 }
-#endif
 
 
 //////////////////////////
@@ -665,7 +641,6 @@ InitializeUctSearch(const unsigned int node_limit)
 //  UCT探索の終了処理
 void TerminateUctSearch()
 {
-#ifdef THREAD_POOL
 #ifdef PV_MATE_SEARCH
 	for (auto& searcher : pv_mate_searchers)
 		searcher.Term();
@@ -675,7 +650,6 @@ void TerminateUctSearch()
 		for (int i = 0; i < max_gpu; i++)
 			search_groups[i].Term();
 	}
-#endif
 }
 
 // position抜きで探索の条件を指定する
