@@ -27,7 +27,7 @@ cdef extern from "python_module.h" nogil:
     void __hcpe3_stat_cache()
     pair[int, int] __hcpe3_to_hcpe(const string& file1, const string& file2) except +
     pair[int, int] __hcpe3_clean(const string& file1, const string& file2) except +
-    void __hcpe3_merge(const vector[string]& files, const string& out) except +
+    void __hcpe3_merge(const vector[string]& files, const string& out, const bool outMaxmove, const bool outMate, const bool outBrinkmate) except +
     unsigned int __get_max_features2_nyugyoku_num()
 
 init()
@@ -88,11 +88,11 @@ def hcpe3_to_hcpe(str file1, str file2):
 def hcpe3_clean(str file1, str file2):
     return __hcpe3_clean(file1.encode(locale.getpreferredencoding()), file2.encode(locale.getpreferredencoding()))
 
-def hcpe3_merge(files, str out):
+def hcpe3_merge(files, str out, bool out_maxmove=False, bool out_mate=False, bool out_brinkmate=False):
     cdef vector[string] cpp_files
     for filepath in files:
         cpp_files.push_back(str(filepath).encode(locale.getpreferredencoding()))
-    __hcpe3_merge(cpp_files, out.encode(locale.getpreferredencoding()))
+    __hcpe3_merge(cpp_files, out.encode(locale.getpreferredencoding()), out_maxmove, out_mate, out_brinkmate)
 
 def get_max_features2_nyugyoku_num():
     return __get_max_features2_nyugyoku_num()

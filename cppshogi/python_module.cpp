@@ -973,6 +973,7 @@ namespace {
 
 constexpr u16 HCPE3_MAX_MOVE_NUM = 513;
 constexpr u16 HCPE3_MAX_CANDIDATE_NUM = MaxLegalMoves - 1;
+constexpr int HCPE3_MATE_SCORE = 30000;
 
 enum class Hcpe3ReadResult {
     Ok,
@@ -990,7 +991,14 @@ struct Hcpe3ParsedGame {
     u8 result;
     u8 gameInfo;
     std::vector<HuffmanCodedPos> positions;
+    std::vector<bool> inChecks;
     std::vector<Hcpe3ParsedMove> moves;
+};
+
+struct Hcpe3MergeOptions {
+    bool outMaxmove;
+    bool outMate;
+    bool outBrinkmate;
 };
 
 struct Hcpe3MergedMove {
@@ -1042,6 +1050,9 @@ struct Hcpe3MergeStats {
     size_t corruptedFileNum = 0;
     size_t rawGameNum = 0;
     size_t zeroMoveSkippedNum = 0;
+    size_t maxMoveSkippedNum = 0;
+    size_t filteredToZeroMoveNum = 0;
+    size_t truncatedGameNum = 0;
 };
 
 Hcpe3ReadResult read_hcpe3_exact(std::ifstream& ifs, char* dst, const std::streamsize size) {
@@ -1262,6 +1273,63 @@ void hcpe3_add_game(
     hcpe3_add_suffixes(suffixIndex, games, newIndex);
 }
 
+bool hcpe3_is_normal_win(const Hcpe3ParsedGame& game) {
+    const auto result = static_cast<GameResult>(game.result & 0x3);
+    return (result == BlackWin || result == WhiteWin) &&
+        !(game.result & (GAMERESULT_SENNICHITE | GAMERESULT_NYUGYOKU | GAMERESULT_MAXMOVE));
+}
+
+size_t hcpe3_brinkmate_move_num(const Hcpe3ParsedGame& game) {
+    size_t positionIndex = game.moves.size();
+    while (positionIndex >= 2 && positionIndex < game.inChecks.size() && game.inChecks[positionIndex]) {
+        positionIndex -= 2;
+    }
+    if (positionIndex >= game.moves.size()) {
+        return game.moves.size();
+    }
+    return std::min(game.moves.size(), positionIndex + 2);
+}
+
+size_t hcpe3_non_mate_move_num(const Hcpe3ParsedGame& game) {
+    for (size_t moveNum = game.moves.size(); moveNum > 0; --moveNum) {
+        if (std::abs(static_cast<int>(game.moves[moveNum - 1].moveInfo.eval)) < HCPE3_MATE_SCORE) {
+            return moveNum;
+        }
+    }
+    return 0;
+}
+
+bool hcpe3_apply_merge_options(Hcpe3ParsedGame& game, const Hcpe3MergeOptions& options, Hcpe3MergeStats& stats) {
+    if ((game.result & GAMERESULT_MAXMOVE) && !options.outMaxmove) {
+        stats.maxMoveSkippedNum++;
+        return false;
+    }
+
+    size_t moveNum = game.moves.size();
+    if (hcpe3_is_normal_win(game)) {
+        if (options.outBrinkmate) {
+            moveNum = std::min(moveNum, hcpe3_brinkmate_move_num(game));
+        }
+        else if (!options.outMate) {
+            moveNum = std::min(moveNum, hcpe3_non_mate_move_num(game));
+        }
+    }
+
+    if (moveNum < game.moves.size()) {
+        stats.truncatedGameNum++;
+        game.moves.resize(moveNum);
+        game.positions.resize(moveNum);
+        if (game.inChecks.size() > moveNum + 1) {
+            game.inChecks.resize(moveNum + 1);
+        }
+    }
+    if (game.moves.empty()) {
+        stats.filteredToZeroMoveNum++;
+        return false;
+    }
+    return !game.moves.empty();
+}
+
 bool hcpe3_read_game(std::ifstream& ifs, const std::string& filepath, const size_t gameIndex, Hcpe3ParsedGame& game, bool& cleanEof) {
     cleanEof = false;
 
@@ -1287,8 +1355,10 @@ bool hcpe3_read_game(std::ifstream& ifs, const std::string& filepath, const size
     game.result = hcpe3.result;
     game.gameInfo = hcpe3.gameInfo;
     game.positions.clear();
+    game.inChecks.clear();
     game.moves.clear();
     game.positions.reserve(hcpe3.moveNum);
+    game.inChecks.reserve(static_cast<size_t>(hcpe3.moveNum) + 1);
     game.moves.reserve(hcpe3.moveNum);
 
     for (int i = 0; i < hcpe3.moveNum; ++i) {
@@ -1312,10 +1382,12 @@ bool hcpe3_read_game(std::ifstream& ifs, const std::string& filepath, const size
             return false;
         }
 
+        game.inChecks.emplace_back(pos.inCheck());
         game.positions.emplace_back(pos.toHuffmanCodedPos());
         game.moves.emplace_back(std::move(parsedMove));
         pos.doMove(move, states->emplace_back(StateInfo()));
     }
+    game.inChecks.emplace_back(pos.inCheck());
 
     return true;
 }
@@ -1405,6 +1477,9 @@ void hcpe3_print_merge_stats(const Hcpe3MergeStats& stats, const std::vector<Hcp
     std::cout << "Files with truncated tail: " << stats.corruptedFileNum << std::endl;
     std::cout << "Raw games before averaging: " << stats.rawGameNum << std::endl;
     std::cout << "Skipped zero-move games: " << stats.zeroMoveSkippedNum << std::endl;
+    std::cout << "Skipped max-move games: " << stats.maxMoveSkippedNum << std::endl;
+    std::cout << "Skipped games filtered to zero moves: " << stats.filteredToZeroMoveNum << std::endl;
+    std::cout << "Games truncated by output options: " << stats.truncatedGameNum << std::endl;
     std::cout << "Games after averaging: " << mergedGameNum << std::endl;
     std::cout << "Minimum moves: " << minMoves << std::endl;
     std::cout << "Maximum moves: " << maxMoves << std::endl;
@@ -1419,7 +1494,8 @@ void hcpe3_print_merge_stats(const Hcpe3MergeStats& stats, const std::vector<Hcp
 
 } // namespace
 
-void __hcpe3_merge(const std::vector<std::string>& files, const std::string& out) {
+void __hcpe3_merge(const std::vector<std::string>& files, const std::string& out, const bool outMaxmove, const bool outMate, const bool outBrinkmate) {
+    const Hcpe3MergeOptions options{ outMaxmove, outMate, outBrinkmate };
     Hcpe3MergeStats stats;
     stats.fileNum = files.size();
 
@@ -1449,6 +1525,9 @@ void __hcpe3_merge(const std::vector<std::string>& files, const std::string& out
             stats.rawGameNum++;
             if (parsed.moves.empty()) {
                 stats.zeroMoveSkippedNum++;
+                continue;
+            }
+            if (!hcpe3_apply_merge_options(parsed, options, stats)) {
                 continue;
             }
             hcpe3_add_game(parsed, games, suffixIndex);
