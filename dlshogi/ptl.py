@@ -207,6 +207,11 @@ class Model(pl.LightningModule):
         lr_scheduler_interval="epoch",
         model_filename=None,
         resume_model=None,
+        use_compile=False,
+        compile_backend=None,
+        compile_mode=None,
+        compile_fullgraph=False,
+        compile_dynamic=False,
     ):
         super().__init__()
         self.save_hyperparameters()
@@ -219,8 +224,41 @@ class Model(pl.LightningModule):
                 self.model, multi_avg_fn=get_ema_multi_avg_fn(ema_decay)
             )
             self.ema_model.requires_grad_(False)
+        self._set_forward_model(self.model)
         self.validation_step_outputs = defaultdict(list)
         self.val_lambda = val_lambda
+
+    def _compile_model(self, model):
+        if not self.hparams.use_compile:
+            return model
+        if not hasattr(torch, "compile"):
+            raise RuntimeError("torch.compile is not available. Please use PyTorch 2.0 or later.")
+
+        compile_kwargs = {}
+        compile_backend = self.hparams.compile_backend
+        if compile_backend is None and os.name == "nt":
+            compile_backend = "aot_eager"
+        if compile_backend:
+            compile_kwargs["backend"] = compile_backend
+        if self.hparams.compile_mode:
+            compile_kwargs["mode"] = self.hparams.compile_mode
+        if self.hparams.compile_fullgraph:
+            compile_kwargs["fullgraph"] = True
+        if self.hparams.compile_dynamic:
+            compile_kwargs["dynamic"] = True
+
+        logging.getLogger("lightning.pytorch.core").info(
+            "use torch.compile({})".format(
+                ", ".join(f"{key}={value}" for key, value in compile_kwargs.items())
+            )
+        )
+        return torch.compile(model, **compile_kwargs)
+
+    def _set_forward_model(self, model):
+        object.__setattr__(self, "_forward_model", self._compile_model(model))
+
+    def forward(self, features1, features2):
+        return self._forward_model(features1, features2)
 
     def on_train_epoch_start(self):
         # update val_lambda
@@ -233,7 +271,7 @@ class Model(pl.LightningModule):
 
     def training_step(self, batch, batch_idx):
         features1, features2, probability, result, value = batch
-        y1, y2 = self.model(features1, features2)
+        y1, y2 = self(features1, features2)
         loss1 = cross_entropy_loss_with_soft_target(y1, probability).mean()
         loss2 = bce_with_logits_loss(y2, result)
         loss3 = bce_with_logits_loss(y2, value)
@@ -295,7 +333,7 @@ class Model(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         features1, features2, move, result, value = batch
-        y1, y2 = self.model(features1, features2)
+        y1, y2 = self(features1, features2)
         loss1 = cross_entropy_loss(y1, move).mean()
         loss2 = bce_with_logits_loss(y2, result)
         loss3 = bce_with_logits_loss(y2, value)
@@ -332,6 +370,7 @@ class Model(pl.LightningModule):
         if self.hparams.use_ema:
             self.tmp_model = self.model
             self.model = self.ema_model
+            self._set_forward_model(self.model)
         return super().on_test_start()
 
     def test_step(self, batch, batch_idx):
@@ -347,6 +386,7 @@ class Model(pl.LightningModule):
         super().on_test_end()
         if self.hparams.use_ema:
             self.model = self.tmp_model
+            self._set_forward_model(self.model)
             del self.tmp_model
 
 
