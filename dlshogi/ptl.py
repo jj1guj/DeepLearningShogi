@@ -142,8 +142,8 @@ class DataModule(pl.LightningDataModule):
                 self.hparams.use_average,
                 self.hparams.use_evalfix,
                 self.hparams.temperature,
-                self.hparams.patch,
-                self.hparams.cache,
+                self.hparams.get("patch"),
+                self.hparams.get("cache"),
             )
             self.val_dataset = HcpeDataset(self.hparams.val_files)
 
@@ -235,13 +235,14 @@ class Model(pl.LightningModule):
             raise RuntimeError("torch.compile is not available. Please use PyTorch 2.0 or later.")
 
         compile_kwargs = {}
-        compile_backend = self.hparams.compile_backend
+        compile_backend = self.hparams.get("compile_backend")
         if compile_backend is None and os.name == "nt":
             compile_backend = "aot_eager"
         if compile_backend:
             compile_kwargs["backend"] = compile_backend
-        if self.hparams.compile_mode:
-            compile_kwargs["mode"] = self.hparams.compile_mode
+        compile_mode = self.hparams.get("compile_mode")
+        if compile_mode:
+            compile_kwargs["mode"] = compile_mode
         if self.hparams.compile_fullgraph:
             compile_kwargs["fullgraph"] = True
         if self.hparams.compile_dynamic:
