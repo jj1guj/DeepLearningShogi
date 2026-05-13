@@ -1,5 +1,6 @@
 import torch
 import argparse
+import os
 from tqdm import tqdm
 import numpy as np
 from dlshogi import serializers
@@ -22,6 +23,11 @@ parser.add_argument('--network')
 parser.add_argument('--gpu', '-g', type=int, default=0)
 parser.add_argument('--use_amp', action='store_true')
 parser.add_argument('--amp_dtype', type=str, default='float16', choices=['float16', 'bfloat16'])
+parser.add_argument('--use_compile', action='store_true', help='Use torch.compile')
+parser.add_argument('--compile_backend', type=str, help='Backend for torch.compile')
+parser.add_argument('--compile_mode', type=str, help='Mode for torch.compile')
+parser.add_argument('--compile_fullgraph', action='store_true', help='Use fullgraph=True for torch.compile')
+parser.add_argument('--compile_dynamic', action='store_true', help='Use dynamic=True for torch.compile')
 args = parser.parse_args()
 
 alpha_p = args.alpha_p
@@ -44,6 +50,26 @@ model.to(device)
 serializers.load_npz(args.model, model)
 model.eval()
 
+compiled_model = model
+if args.use_compile:
+    if not hasattr(torch, 'compile'):
+        raise RuntimeError('torch.compile is not available. Please use PyTorch 2.0 or later.')
+
+    compile_kwargs = {}
+    compile_backend = args.compile_backend
+    if compile_backend is None and os.name == 'nt':
+        compile_backend = 'aot_eager'
+    if compile_backend:
+        compile_kwargs['backend'] = compile_backend
+    if args.compile_mode:
+        compile_kwargs['mode'] = args.compile_mode
+    if args.compile_fullgraph:
+        compile_kwargs['fullgraph'] = True
+    if args.compile_dynamic:
+        compile_kwargs['dynamic'] = True
+
+    compiled_model = torch.compile(model, **compile_kwargs)
+
 data_len, actual_len = Hcpe3DataLoader.load_files([], cache=args.cache)
 indexes = np.arange(data_len, dtype=np.uint64)
 dataloader = Hcpe3DataLoader(indexes, batch_size, device)
@@ -61,7 +87,7 @@ for i in tqdm(range(0, len(indexes), batch_size)):
     x1, x2, t1, t2, value = dataloader.mini_batch(chunk)
     with torch.cuda.amp.autocast(enabled=use_amp, dtype=amp_dtype):
         with torch.no_grad():
-            y1, y2 = model(x1, x2)
+            y1, y2 = compiled_model(x1, x2)
 
             y1 = y1.float().cpu().numpy()
             y2 = y2.float().sigmoid().cpu().numpy()
